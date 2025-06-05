@@ -4,9 +4,47 @@
   <meta charset="UTF-8" />
   <title>Partidas por Torneo y Casual</title>
   <style>
-    body { font-family: sans-serif; background: #f8f8f8; padding: 2rem; }
-    h1 { text-align: center; }
-    .section-title { margin-top: 3rem; font-size: 1.5rem; border-bottom: 2px solid #ccc; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: sans-serif;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+    .background {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      z-index: -1;
+    }
+    .left {
+      flex: 1;
+      background-color: #fff8b3;
+    }
+    .right {
+      flex: 1;
+      background-color: #ccffcc;
+    }
+    .content {
+      position: relative;
+      z-index: 1;
+      padding: 2rem;
+    }
+    h1 {
+      text-align: center;
+    }
+    .section-title {
+      text-align: center;
+      margin-top: 2rem;
+      font-size: 1.5rem;
+      border-bottom: 2px solid #ccc;
+    }
     .card {
       background: white;
       margin: 1rem auto;
@@ -15,20 +53,62 @@
       border-radius: 8px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    .card h2 { margin: 0 0 0.5rem; }
-    .player { display: flex; justify-content: space-between; padding: 0.25rem 0; }
-    .amarillo { color: #e2b600; font-weight: bold; }
-    .verde { color: #007f00; font-weight: bold; }
-    .partida-fecha { font-size: 0.9rem; margin: 0.3rem 0; font-style: italic; }
+    .card h2 {
+      margin: 0 0 0.5rem;
+    }
+    .resumen-ganador {
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .player {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.25rem 0;
+    }
+    .amarillo {
+      color: #e2b600;
+      font-weight: bold;
+    }
+    .verde {
+      color: #007f00;
+      font-weight: bold;
+    }
+    .partida-fecha {
+      font-size: 0.9rem;
+      margin: 0.3rem 0;
+      font-style: italic;
+    }
+    .botonera {
+      text-align: center;
+      margin: 2rem 0;
+    }
+    .botonera button {
+      margin: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      background-color: #444;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
-  <h1>Historial de Partidas</h1>
-  <div class="section-title">🏆 Torneos</div>
-  <div id="torneos"></div>
+  <div class="background">
+    <div class="left"></div>
+    <div class="right"></div>
+  </div>
+  <div class="content">
+    <h1>Historial de Partidas</h1>
 
-  <div class="section-title">🎲 Partidas Casual</div>
-  <div id="casuales"></div>
+    <div class="botonera">
+      <button onclick="renderPorTipo()">Por tipo de partida</button>
+      <button onclick="renderTodasPorFecha()">Todas por fecha</button>
+      <button onclick="renderPorJuego()">Por juego</button>
+    </div>
+
+    <div id="contenedor"></div>
+  </div>
 
   <!-- Scripts de datos -->
   <script src="boardGames.js"></script>
@@ -39,69 +119,149 @@
   <script src="playerMatches.js"></script>
 
   <script>
-    const torneosDiv = document.getElementById("torneos");
-    const casualesDiv = document.getElementById("casuales");
+    const contenedor = document.getElementById("contenedor");
 
-    // Agrupar partidas por torneoId
-    const partidasPorTorneo = {};
-    const partidasCasuales = {};
-
-    matches.forEach(match => {
-      const game = boardGames.find(g => g.id === match.boardGameId);
-      const key = match.tournamentId ? `torneo-${match.tournamentId}` : `casual-${game.id}`;
-
-      if (match.tournamentId) {
-        if (!partidasPorTorneo[key]) partidasPorTorneo[key] = [];
-        partidasPorTorneo[key].push(match);
-      } else {
-        if (!partidasCasuales[key]) partidasCasuales[key] = { game, partidas: [] };
-        partidasCasuales[key].partidas.push(match);
-      }
-    });
-
-    // Renderizar torneos
-    Object.entries(partidasPorTorneo).forEach(([key, matchesList]) => {
-      const match = matchesList[0];
-      const game = boardGames.find(g => g.id === match.boardGameId);
-      const torneo = tournaments.find(t => t.id === match.tournamentId);
-      const tipoTorneo = tournamentTypes.find(tt => tt.id === torneo.tournamentTypeId);
-
-      const div = document.createElement("div");
-      div.className = "card";
-      div.innerHTML = `<h2>${game.name} (${tipoTorneo.name})</h2>`;
-
+    function calcularGanadores(matchesList) {
+      let ganados = { 1: 0, 2: 0 };
       matchesList.forEach(m => {
-        const fecha = m.date;
         const pms = playerMatches.filter(pm => pm.matchId === m.id);
-        div.innerHTML += `<div class="partida-fecha">${fecha}</div>`;
+        if (pms.length === 2) {
+          if (pms[0].victoryPoints > pms[1].victoryPoints) ganados[pms[0].playerId]++;
+          else if (pms[1].victoryPoints > pms[0].victoryPoints) ganados[pms[1].playerId]++;
+        }
+      });
+      return ganados;
+    }
+
+    function resumenGanadorHTML(g1, g2) {
+      return `<div class="resumen-ganador">Ganadas — Gabriel: ${g1}, Martín: ${g2}</div>`;
+    }
+
+    function renderPorTipo() {
+      clearContainer();
+
+      const torneosDiv = document.createElement("div");
+      torneosDiv.innerHTML = `<div class="section-title">🏆 Torneos</div>`;
+
+      const casualesDiv = document.createElement("div");
+      casualesDiv.innerHTML = `<div class="section-title">🎲 Partidas Casual</div>`;
+
+      const partidasPorTorneo = {};
+      const partidasCasuales = {};
+
+      matches.forEach(match => {
+        const game = boardGames.find(g => g.id === match.boardGameId);
+        const key = match.tournamentId ? `torneo-${match.tournamentId}` : `casual-${game.id}`;
+
+        if (match.tournamentId) {
+          if (!partidasPorTorneo[key]) partidasPorTorneo[key] = [];
+          partidasPorTorneo[key].push(match);
+        } else {
+          if (!partidasCasuales[key]) partidasCasuales[key] = { game, partidas: [] };
+          partidasCasuales[key].partidas.push(match);
+        }
+      });
+
+      Object.entries(partidasPorTorneo).forEach(([key, matchesList]) => {
+        const match = matchesList[0];
+        const game = boardGames.find(g => g.id === match.boardGameId);
+        const torneo = tournaments.find(t => t.id === match.tournamentId);
+        const tipoTorneo = tournamentTypes.find(tt => tt.id === torneo.tournamentTypeId);
+        const resumen = calcularGanadores(matchesList);
+
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `<h2>${game.name} (${tipoTorneo.name})</h2>` + resumenGanadorHTML(resumen[1], resumen[2]);
+
+        matchesList.forEach(m => {
+          div.innerHTML += `<div class="partida-fecha">${m.date}</div>`;
+          const pms = playerMatches.filter(pm => pm.matchId === m.id);
+          pms.forEach(pm => {
+            const jugador = players.find(p => p.id === pm.playerId);
+            const clase = jugador.favColour === "amarillo" ? "amarillo" : "verde";
+            div.innerHTML += `<div class="player"><span class="${clase}">${jugador.name}</span><span>${pm.victoryPoints} pts</span></div>`;
+          });
+        });
+
+        torneosDiv.appendChild(div);
+      });
+
+      Object.values(partidasCasuales).forEach(({ game, partidas }) => {
+        const resumen = calcularGanadores(partidas);
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `<h2>${game.name}</h2>` + resumenGanadorHTML(resumen[1], resumen[2]);
+
+        partidas.forEach(m => {
+          div.innerHTML += `<div class="partida-fecha">${m.date}</div>`;
+          const pms = playerMatches.filter(pm => pm.matchId === m.id);
+          pms.forEach(pm => {
+            const jugador = players.find(p => p.id === pm.playerId);
+            const clase = jugador.favColour === "amarillo" ? "amarillo" : "verde";
+            div.innerHTML += `<div class="player"><span class="${clase}">${jugador.name}</span><span>${pm.victoryPoints} pts</span></div>`;
+          });
+        });
+
+        casualesDiv.appendChild(div);
+      });
+
+      contenedor.appendChild(torneosDiv);
+      contenedor.appendChild(casualesDiv);
+    }
+
+    function renderTodasPorFecha() {
+      clearContainer();
+      const ordenadas = [...matches].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      ordenadas.forEach(match => {
+        const game = boardGames.find(g => g.id === match.boardGameId);
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `<h2>${game.name}</h2><div class="partida-fecha">${match.date}</div>`;
+
+        const pms = playerMatches.filter(pm => pm.matchId === match.id);
         pms.forEach(pm => {
           const jugador = players.find(p => p.id === pm.playerId);
           const clase = jugador.favColour === "amarillo" ? "amarillo" : "verde";
           div.innerHTML += `<div class="player"><span class="${clase}">${jugador.name}</span><span>${pm.victoryPoints} pts</span></div>`;
         });
+
+        contenedor.appendChild(div);
       });
+    }
 
-      torneosDiv.appendChild(div);
-    });
+    function renderPorJuego() {
+      clearContainer();
+      const juegosOrdenados = [...boardGames].sort((a, b) => a.name.localeCompare(b.name));
 
-    // Renderizar casuales agrupados por juego
-    Object.values(partidasCasuales).forEach(({ game, partidas }) => {
-      const div = document.createElement("div");
-      div.className = "card";
-      div.innerHTML = `<h2>${game.name}</h2>`;
+      juegosOrdenados.forEach(game => {
+        const matchesDelJuego = matches.filter(m => m.boardGameId === game.id);
+        if (matchesDelJuego.length === 0) return;
 
-      partidas.forEach(m => {
-        div.innerHTML += `<div class="partida-fecha">${m.date}</div>`;
-        const pms = playerMatches.filter(pm => pm.matchId === m.id);
-        pms.forEach(pm => {
-          const jugador = players.find(p => p.id === pm.playerId);
-          const clase = jugador.favColour === "amarillo" ? "amarillo" : "verde";
-          div.innerHTML += `<div class="player"><span class="${clase}">${jugador.name}</span><span>${pm.victoryPoints} pts</span></div>`;
+        const resumen = calcularGanadores(matchesDelJuego);
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `<h2>${game.name}</h2>` + resumenGanadorHTML(resumen[1], resumen[2]);
+
+        matchesDelJuego.forEach(match => {
+          div.innerHTML += `<div class="partida-fecha">${match.date}</div>`;
+          const pms = playerMatches.filter(pm => pm.matchId === match.id);
+          pms.forEach(pm => {
+            const jugador = players.find(p => p.id === pm.playerId);
+            const clase = jugador.favColour === "amarillo" ? "amarillo" : "verde";
+            div.innerHTML += `<div class="player"><span class="${clase}">${jugador.name}</span><span>${pm.victoryPoints} pts</span></div>`;
+          });
         });
-      });
 
-      casualesDiv.appendChild(div);
-    });
+        contenedor.appendChild(div);
+      });
+    }
+
+    function clearContainer() {
+      contenedor.innerHTML = "";
+    }
+
+    renderPorTipo();
   </script>
 </body>
 </html>
